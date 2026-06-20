@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Dashboard | EMS / RP evidence{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="text-uppercase text-info fw-semibold mb-1">Přehled</p><h1>Dashboard evidence</h1></div></div>
+
+{% if active_shift %}
+<section class="panel active-shift-panel mb-4">
+    <div class="panel-header"><h2>Aktuální směna probíhá</h2><a href="{{ url_for('add_purchase') }}" class="btn btn-primary">Zapsat nákup</a></div>
+    <div class="row g-3">
+        <div class="col-md-3"><span class="muted-label">Jméno</span><strong>{{ active_shift.name }}</strong></div>
+        <div class="col-md-3"><span class="muted-label">Volací znak</span><strong>{{ active_shift.callsign }}</strong></div>
+        <div class="col-md-3"><span class="muted-label">Vozidlo</span><strong>{{ active_shift.vehicle }}</strong></div>
+        <div class="col-md-3"><span class="muted-label">Začátek</span><strong>{{ active_shift.started_at }}</strong></div>
+        <div class="col-md-3"><span class="muted-label">Živý čas</span><strong class="live-duration">00:00</strong></div>
+        <div class="col-md-3"><span class="muted-label">Nákupy ve směně</span><strong>{{ active_stats.count }}</strong></div>
+        <div class="col-md-3"><span class="muted-label">Cena nákupů</span><strong>${{ format_money(active_stats.total_price) }}</strong></div>
+        <div class="col-md-3"><span class="muted-label">Váha nákupů</span><strong>{{ format_weight(active_stats.total_weight) }}g</strong></div>
+    </div>
+</section>
+{% else %}
+<section class="panel mb-4"><div class="empty-state"><h2>Žádná směna neběží</h2><p>Zahajte směnu zeleným tlačítkem vpravo nahoře. Nákupy se pak automaticky přiřadí k aktivní směně.</p></div></section>
+{% endif %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4"><div class="stat-card"><span>Zapsané směny</span><strong>{{ shift_count }}</strong></div></div>
+    <div class="col-md-4"><div class="stat-card"><span>Zapsané nákupy</span><strong>{{ purchase_count }}</strong></div></div>
+    <div class="col-md-4"><div class="stat-card"><span>Odpracované hodiny</span><strong>{{ total_hours }}</strong></div></div>
+</div>
+
+<section class="panel">
+    <div class="panel-header"><h2>Poslední nákupy</h2><a href="{{ url_for('add_purchase') }}" class="btn btn-primary btn-sm">Přidat nákup</a></div>
+    <div class="table-responsive">
+        <table class="table table-dark table-hover align-middle">
+            <thead><tr><th>Jméno</th><th>Volací znak</th><th>Důvod</th><th>Cena</th><th>Váha</th><th>Datum</th></tr></thead>
+            <tbody>
+            {% for purchase in latest_purchases %}
+                <tr><td>{{ purchase.name }}</td><td>{{ purchase.callsign }}</td><td>{{ purchase.reason }}</td><td>${{ format_money(purchase.total_price) }}</td><td>{{ format_weight(purchase.total_weight) }}g</td><td>{{ purchase.created_at[:10] }}</td></tr>
+            {% else %}
+                <tr><td colspan="6" class="text-center text-secondary">Zatím žádné nákupy.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
