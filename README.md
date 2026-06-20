@@ -71,15 +71,15 @@ Databáze SQLite se vytvoří automaticky v souboru `instance/database.db`.
 
 ## Výchozí katalog položek
 
-- Rádio — cena 500, váha 100g
-- Tazer — cena 3000, váha 227g
-- Medibag — cena 10, váha 220g
-- Bandáže — cena 10, váha 100g
-- Defibrilátor — cena 10, váha 100g
-- Pinzeta — cena 10, váha 100g
-- Krém na popálení — cena 10, váha 100g
-- Šicí souprava — cena 10, váha 100g
-- Chladící obklad — cena 1, váha 200g
+- Rádio - cena 500, váha 100g
+- Tazer - cena 3000, váha 227g
+- Medibag - cena 10, váha 220g
+- Bandáže - cena 10, váha 100g
+- Defibrilátor - cena 10, váha 100g
+- Pinzeta - cena 10, váha 100g
+- Krém na popálení - cena 10, váha 100g
+- Šicí souprava - cena 10, váha 100g
+- Chladící obklad - cena 1, váha 200g
 
 ## Poznámky
 
