@@ -10,15 +10,15 @@ from flask import Flask, Response, flash, g, jsonify, redirect, render_template,
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATABASE = os.path.join(BASE_DIR, "instance", "database.db")
 CATALOG_ITEMS = [
-    ("Rádio", 500, 100),
-    ("Tazer", 3000, 227),
-    ("Medibag", 10, 220),
-    ("Bandáže", 10, 100),
-    ("Defibrilátor", 10, 100),
-    ("Pinzeta", 10, 100),
-    ("Krém na popálení", 10, 100),
-    ("Šicí souprava", 10, 100),
-    ("Chladící obklad", 1, 200),
+    ("Rádio", 500),
+    ("Tazer", 3000),
+    ("Medibag", 10),
+    ("Bandáže", 10),
+    ("Defibrilátor", 10),
+    ("Pinzeta", 10),
+    ("Krém na popálení", 10),
+    ("Šicí souprava", 10),
+    ("Chladící obklad", 1),
 ]
 
 app = Flask(__name__)
@@ -69,7 +69,6 @@ def init_db():
             reason TEXT NOT NULL,
             note TEXT,
             total_price REAL NOT NULL DEFAULT 0,
-            total_weight REAL NOT NULL DEFAULT 0,
             discord_message TEXT,
             created_at TEXT NOT NULL,
             FOREIGN KEY (shift_id) REFERENCES shifts (id) ON DELETE SET NULL
@@ -81,9 +80,7 @@ def init_db():
             item_name TEXT NOT NULL,
             quantity REAL NOT NULL DEFAULT 1,
             unit_price REAL NOT NULL DEFAULT 0,
-            weight_grams REAL NOT NULL DEFAULT 0,
             total_price REAL NOT NULL DEFAULT 0,
-            total_weight REAL NOT NULL DEFAULT 0,
             note TEXT,
             FOREIGN KEY (purchase_id) REFERENCES purchases (id) ON DELETE CASCADE
         );
@@ -91,20 +88,20 @@ def init_db():
         CREATE TABLE IF NOT EXISTS item_catalog (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             item_name TEXT NOT NULL UNIQUE,
-            default_price REAL NOT NULL DEFAULT 0,
-            weight_grams REAL NOT NULL DEFAULT 0
+            default_price REAL NOT NULL DEFAULT 0
         );
         """
     )
     ensure_columns(db)
-    for item_name, default_price, weight_grams in CATALOG_ITEMS:
+    for catalog_item in CATALOG_ITEMS:
+        item_name, default_price = catalog_item[:2]
         db.execute(
             """
-            INSERT INTO item_catalog (item_name, default_price, weight_grams)
-            VALUES (?, ?, ?)
-            ON CONFLICT(item_name) DO UPDATE SET default_price = excluded.default_price, weight_grams = excluded.weight_grams
+            INSERT INTO item_catalog (item_name, default_price)
+            VALUES (?, ?)
+            ON CONFLICT(item_name) DO UPDATE SET default_price = excluded.default_price
             """,
-            (item_name, default_price, weight_grams),
+            (item_name, default_price),
         )
     db.commit()
 
@@ -123,14 +120,11 @@ def ensure_columns(db):
         "purchases": {
             "shift_id": "INTEGER",
             "total_price": "REAL NOT NULL DEFAULT 0",
-            "total_weight": "REAL NOT NULL DEFAULT 0",
             "discord_message": "TEXT",
         },
         "purchase_items": {
             "unit_price": "REAL NOT NULL DEFAULT 0",
-            "weight_grams": "REAL NOT NULL DEFAULT 0",
             "total_price": "REAL NOT NULL DEFAULT 0",
-            "total_weight": "REAL NOT NULL DEFAULT 0",
         },
     }
     for table, columns in required.items():
@@ -233,12 +227,11 @@ def build_purchase_message(purchase, items):
     ]
     for item in items:
         lines.append(
-            f"- {format_quantity(item['quantity'])}x {item['item_name']} | ${format_money(item['total_price'])} | {format_weight(item['total_weight'])}g"
+            f"- {format_quantity(item['quantity'])}x {item['item_name']} | ${format_money(item['total_price'])}"
         )
     lines.extend([
         "",
         f"**Celková cena:** ${format_money(purchase['total_price'])}",
-        f"**Celková váha:** {format_weight(purchase['total_weight'])}g",
         "",
         f"**Poznámka:** {purchase['note'] or 'bez poznámky'}",
     ])
@@ -248,7 +241,6 @@ def build_purchase_message(purchase, items):
 def build_shift_message(shift):
     purchases = fetch_shift_purchases(shift["id"])
     total_price = sum(float(row["total_price"] or 0) for row in purchases)
-    total_weight = sum(float(row["total_weight"] or 0) for row in purchases)
     lines = [
         "## Zápis směny",
         "",
@@ -265,14 +257,13 @@ def build_shift_message(shift):
         for purchase in purchases:
             for item in fetch_purchase_items(purchase["id"]):
                 lines.append(
-                    f"- {format_quantity(item['quantity'])}x {item['item_name']} | ${format_money(item['total_price'])} | {format_weight(item['total_weight'])}g"
+                    f"- {format_quantity(item['quantity'])}x {item['item_name']} | ${format_money(item['total_price'])}"
                 )
     else:
         lines.append("- žádné nákupy")
     lines.extend([
         "",
         f"**Celková cena:** ${format_money(total_price)}",
-        f"**Celková váha:** {format_weight(total_weight)}g",
         "",
         f"**Poznámka:** {shift['note'] or 'bez poznámky'}",
     ])
@@ -284,14 +275,12 @@ def format_money(value):
     return str(int(value)) if value.is_integer() else f"{value:.2f}"
 
 
-def format_weight(value):
-    value = float(value or 0)
-    return str(int(value)) if value.is_integer() else f"{value:.2f}"
-
-
 def format_quantity(value):
     value = float(value or 0)
     return str(int(value)) if value.is_integer() else f"{value:.2f}"
+
+
+
 
 
 @app.route("/")
@@ -302,10 +291,10 @@ def dashboard():
     purchase_count = db.execute("SELECT COUNT(*) AS count FROM purchases").fetchone()["count"]
     total_minutes = db.execute("SELECT COALESCE(SUM(duration_minutes), 0) AS total FROM shifts").fetchone()["total"]
     latest_purchases = db.execute("SELECT * FROM purchases ORDER BY created_at DESC, id DESC LIMIT 6").fetchall()
-    active_stats = {"count": 0, "total_price": 0, "total_weight": 0}
+    active_stats = {"count": 0, "total_price": 0}
     if active_shift:
         stats = db.execute(
-            "SELECT COUNT(*) AS count, COALESCE(SUM(total_price), 0) AS total_price, COALESCE(SUM(total_weight), 0) AS total_weight FROM purchases WHERE shift_id = ?",
+            "SELECT COUNT(*) AS count, COALESCE(SUM(total_price), 0) AS total_price FROM purchases WHERE shift_id = ?",
             (active_shift["id"],),
         ).fetchone()
         active_stats = dict(stats)
@@ -455,7 +444,6 @@ def parse_items(form):
     names = form.getlist("item_name[]")
     quantities = form.getlist("quantity[]")
     prices = form.getlist("unit_price[]")
-    weights = form.getlist("weight_grams[]")
     notes = form.getlist("item_note[]")
     items = []
     catalog = {row["item_name"]: row for row in get_catalog()}
@@ -466,12 +454,10 @@ def parse_items(form):
         catalog_item = catalog.get(item_name)
         quantity = parse_float(quantities[index] if index < len(quantities) else "1", 1)
         unit_price = parse_float(prices[index] if index < len(prices) else "", catalog_item["default_price"] if catalog_item else 0)
-        weight_grams = parse_float(weights[index] if index < len(weights) else "", catalog_item["weight_grams"] if catalog_item else 0)
         quantity = max(quantity, 0.01)
         total_price = round(quantity * unit_price, 2)
-        total_weight = round(quantity * weight_grams, 2)
         note = notes[index].strip() if index < len(notes) else ""
-        items.append({"item_name": item_name, "quantity": quantity, "unit_price": unit_price, "weight_grams": weight_grams, "total_price": total_price, "total_weight": total_weight, "note": note})
+        items.append({"item_name": item_name, "quantity": quantity, "unit_price": unit_price, "total_price": total_price, "note": note})
     return items
 
 
@@ -502,16 +488,15 @@ def handle_purchase_form(purchase=None, items=None):
             flash("Přidejte alespoň jednu položku nákupu.", "danger")
         else:
             total_price = round(sum(item["total_price"] for item in parsed_items), 2)
-            total_weight = round(sum(item["total_weight"] for item in parsed_items), 2)
             shift_id = active_shift["id"] if active_shift else None
             db = get_db()
             if purchase is None:
                 cursor = db.execute(
                     """
-                    INSERT INTO purchases (shift_id, name, callsign, reason, note, total_price, total_weight, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO purchases (shift_id, name, callsign, reason, note, total_price, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (shift_id, name, callsign, reason, note, total_price, total_weight, db_timestamp()),
+                    (shift_id, name, callsign, reason, note, total_price, db_timestamp()),
                 )
                 purchase_id = cursor.lastrowid
                 flash("Nákup byl úspěšně přidán.", "success")
@@ -519,18 +504,18 @@ def handle_purchase_form(purchase=None, items=None):
                 purchase_id = purchase["id"]
                 shift_id = purchase["shift_id"] if purchase["shift_id"] else shift_id
                 db.execute(
-                    "UPDATE purchases SET shift_id = ?, name = ?, callsign = ?, reason = ?, note = ?, total_price = ?, total_weight = ? WHERE id = ?",
-                    (shift_id, name, callsign, reason, note, total_price, total_weight, purchase_id),
+                    "UPDATE purchases SET shift_id = ?, name = ?, callsign = ?, reason = ?, note = ?, total_price = ? WHERE id = ?",
+                    (shift_id, name, callsign, reason, note, total_price, purchase_id),
                 )
                 db.execute("DELETE FROM purchase_items WHERE purchase_id = ?", (purchase_id,))
                 flash("Nákup byl úspěšně upraven.", "success")
             for item in parsed_items:
                 db.execute(
                     """
-                    INSERT INTO purchase_items (purchase_id, item_name, quantity, unit_price, weight_grams, total_price, total_weight, note)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO purchase_items (purchase_id, item_name, quantity, unit_price, total_price, note)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
-                    (purchase_id, item["item_name"], item["quantity"], item["unit_price"], item["weight_grams"], item["total_price"], item["total_weight"], item["note"]),
+                    (purchase_id, item["item_name"], item["quantity"], item["unit_price"], item["total_price"], item["note"]),
                 )
             db.commit()
             saved_purchase = db.execute("SELECT * FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
@@ -557,9 +542,8 @@ def delete_purchase(purchase_id):
 def export_purchases():
     rows = get_db().execute(
         """
-        SELECT p.id, p.shift_id, p.name, p.callsign, p.reason, p.note AS purchase_note, p.total_price AS purchase_total_price,
-               p.total_weight AS purchase_total_weight, p.discord_message, p.created_at,
-               i.item_name, i.quantity, i.unit_price, i.weight_grams, i.total_price, i.total_weight, i.note AS item_note
+        SELECT p.id, p.shift_id, p.name, p.callsign, p.reason, p.note AS purchase_note, p.total_price AS purchase_total_price, p.discord_message, p.created_at,
+             i.item_name, i.quantity, i.unit_price, i.total_price, i.note AS item_note
         FROM purchases p
         LEFT JOIN purchase_items i ON i.purchase_id = p.id
         ORDER BY p.created_at DESC, p.id DESC, i.id ASC
@@ -569,7 +553,7 @@ def export_purchases():
     writer = csv.writer(output, delimiter=";")
     writer.writerow(["ID nákupu", "ID směny", "Jméno", "Volací znak", "Důvod", "Poznámka nákupu", "Cena celkem", "Váha celkem", "Discord zpráva", "Vytvořeno", "Položka", "Množství", "Cena/ks", "Váha/ks", "Cena položky", "Váha položky", "Poznámka položky"])
     for row in rows:
-        writer.writerow([row["id"], row["shift_id"] or "", row["name"], row["callsign"], row["reason"], row["purchase_note"] or "", row["purchase_total_price"], row["purchase_total_weight"], row["discord_message"] or "", row["created_at"], row["item_name"] or "", row["quantity"] or "", row["unit_price"] or "", row["weight_grams"] or "", row["total_price"] or "", row["total_weight"] or "", row["item_note"] or ""])
+        writer.writerow([row["id"], row["shift_id"] or "", row["name"], row["callsign"], row["reason"], row["purchase_note"] or "", row["purchase_total_price"], row["discord_message"] or "", row["created_at"], row["item_name"] or "", row["quantity"] or "", row["unit_price"] or "", row["total_price"] or "", row["item_note"] or ""])
     return csv_response(output.getvalue(), "nakupy.csv")
 
 
@@ -583,7 +567,6 @@ def csv_response(content, filename):
 
 app.jinja_env.globals.update(
     format_money=format_money,
-    format_weight=format_weight,
     format_quantity=format_quantity,
     format_duration=format_duration,
     format_time=format_time,
