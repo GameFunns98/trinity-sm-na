@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Upravit směnu' if shift else 'Přidat směnu' }} | EMS / RP evidence{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="text-uppercase text-info fw-semibold mb-1">Směny</p><h1>{{ 'Upravit směnu' if shift else 'Přidat směnu' }}</h1></div></div>
+<section class="panel form-panel">
+    <form method="post" class="row g-3">
+        <div class="col-md-6"><label class="form-label">Jméno *</label><input class="form-control" name="name" required value="{{ shift.name if shift else '' }}"></div>
+        <div class="col-md-6"><label class="form-label">Volací znak *</label><input class="form-control" name="callsign" required value="{{ shift.callsign if shift else '' }}"></div>
+        <div class="col-md-4"><label class="form-label">Datum směny *</label><input type="date" class="form-control" name="shift_date" required value="{{ shift.shift_date if shift else '' }}"></div>
+        <div class="col-md-4"><label class="form-label">Čas od *</label><input type="time" class="form-control duration-input" name="time_from" required value="{{ shift.time_from if shift else '' }}"></div>
+        <div class="col-md-4"><label class="form-label">Čas do *</label><input type="time" class="form-control duration-input" name="time_to" required value="{{ shift.time_to if shift else '' }}"></div>
+        <div class="col-md-6"><label class="form-label">Použité vozidlo *</label><input class="form-control" name="vehicle" required value="{{ shift.vehicle if shift else '' }}"></div>
+        <div class="col-md-6"><label class="form-label">Délka směny</label><input class="form-control" id="durationPreview" readonly value="{{ (shift.duration_hours ~ ' hodin') if shift else 'Vyplní se automaticky' }}"></div>
+        <div class="col-12"><label class="form-label">Poznámka</label><textarea class="form-control" name="note" rows="4">{{ shift.note if shift else '' }}</textarea></div>
+        <div class="col-12 action-row"><button class="btn btn-primary">Uložit</button><a href="{{ url_for('shifts') }}" class="btn btn-outline-light">Zpět</a></div>
+    </form>
+</section>
+{% endblock %}
