@@ -27,7 +27,7 @@
                 {% set item = None %}{% include "_purchase_item_row.html" %}
             {% endif %}
         </div>
-        <div class="col-12 totals-box"><span>Celková cena: <strong id="totalPrice">$0</strong></span><span>Celková váha: <strong id="totalWeight">0g</strong></span></div>
+        <div class="col-12 totals-box"><span>Celková cena: <strong id="totalPrice">$0</strong></span></div>
         <div class="col-12 action-row"><button class="btn btn-primary">Uložit</button><a href="{{ url_for('purchases') }}" class="btn btn-outline-light">Zpět</a></div>
     </form>
 </section>
