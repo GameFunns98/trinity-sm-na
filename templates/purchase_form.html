@@ -3,7 +3,9 @@
 {% block content %}
 <div class="page-heading"><div><p class="text-uppercase text-info fw-semibold mb-1">Nákupy</p><h1>{{ 'Upravit nákup' if purchase else 'Přidat nákup' }}</h1></div></div>
 
-{% if active_shift %}
+{% if purchase %}
+<div class="alert alert-info">Upravuješ existující nákup{% if purchase.shift_id %} ze směny #{{ purchase.shift_id }}{% endif %}. Aktivní směna pro úpravu není potřeba.</div>
+{% elif active_shift %}
 <div class="alert alert-info">Nákup bude uložen k aktivní směně #{{ active_shift.id }}: {{ active_shift.name }} / {{ active_shift.callsign }}.</div>
 {% elif needs_shift_confirmation %}
 <div class="alert alert-danger">Není aktivní směna. Pokud chcete nákup uložit bez směny, zaškrtněte potvrzení níže.</div>

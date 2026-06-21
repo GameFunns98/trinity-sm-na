@@ -1,5 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Směny | EMS / RP evidence{% endblock %}
+{% block title %}Upravit směnu | EMS / RP evidence{% endblock %}
 {% block content %}
-<section class="panel"><h1>Směny se nyní řídí časovačem</h1><p>Zahajte nebo ukončete směnu tlačítkem v pravém horním rohu.</p></section>
+<div class="page-heading"><div><p class="text-uppercase text-info fw-semibold mb-1">Směny</p><h1>Upravit směnu #{{ shift.id }}</h1></div></div>
+
+{% if is_active_shift %}
+<div class="alert alert-info">Směna právě běží. Můžeš opravit začátek a údaje záznamu, konec se stále zapisuje tlačítkem nahoře.</div>
+{% else %}
+<div class="alert alert-info">Po uložení se přepočítá délka směny i celý zápis směny v Discord formátu.</div>
+{% endif %}
+
+<section class="panel form-panel">
+    <form method="post" class="row g-3">
+        <div class="col-md-6"><label class="form-label">Jméno *</label><input class="form-control" name="name" required value="{{ shift.name }}"></div>
+        <div class="col-md-6"><label class="form-label">Volací znak *</label><input class="form-control" name="callsign" required value="{{ shift.callsign }}"></div>
+        <div class="col-md-6"><label class="form-label">Začátek směny *</label><input type="datetime-local" class="form-control" name="started_at" required value="{{ datetime_for_input(shift.started_at) }}"></div>
+        {% if is_active_shift %}
+        <div class="col-md-6"><label class="form-label">Konec směny</label><input class="form-control" value="Doplní se po ukončení směny." disabled></div>
+        {% else %}
+        <div class="col-md-6"><label class="form-label">Konec směny *</label><input type="datetime-local" class="form-control" name="ended_at" required value="{{ datetime_for_input(shift.ended_at) }}"></div>
+        {% endif %}
+        <div class="col-12">
+            <label class="form-label">SPZ / použitá vozidla</label>
+            <textarea class="form-control" name="vehicle" rows="3" placeholder="Např. EMS-12, EMS-41 nebo každé vozidlo na nový řádek">{{ shift.vehicle }}</textarea>
+            <div class="form-text">Sem můžeš po směně doplnit i více vozidel nebo SPZ najednou.</div>
+        </div>
+        <div class="col-12"><label class="form-label">Poznámka</label><textarea class="form-control" name="note" rows="4">{{ shift.note or '' }}</textarea></div>
+        <div class="col-12 action-row"><button class="btn btn-primary">Uložit změny</button><a href="{{ url_for('shifts') }}" class="btn btn-outline-light">Zpět</a></div>
+    </form>
+</section>
 {% endblock %}

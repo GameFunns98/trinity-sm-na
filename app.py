@@ -158,6 +158,11 @@ def date_for_input(value):
     return value[:10]
 
 
+def datetime_for_input(value):
+    parsed = parse_db_datetime(value)
+    return parsed.strftime("%Y-%m-%dT%H:%M") if parsed else ""
+
+
 def get_active_shift():
     return get_db().execute(
         "SELECT * FROM shifts WHERE status = 'probíhá' ORDER BY started_at DESC, id DESC LIMIT 1"
@@ -172,6 +177,18 @@ def parse_db_datetime(value):
     if not value:
         return None
     return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+
+
+def parse_form_datetime(value):
+    value = (value or "").strip()
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    return None
 
 
 def format_time(value):
@@ -249,7 +266,7 @@ def build_shift_message(shift):
         f"**Datum:** {format_date_cz(shift['shift_date'])}",
         f"**Čas směny:** {format_time(shift['started_at'])} - {format_time(shift['ended_at'])}",
         f"**Délka směny:** {format_duration(shift['duration_minutes'])}",
-        f"**Použité vozidlo:** {shift['vehicle']}",
+        f"**SPZ / použitá vozidla:** {format_vehicle_text(shift['vehicle'])}",
         "",
         "### Nákupy během směny",
     ]
@@ -278,6 +295,39 @@ def format_money(value):
 def format_quantity(value):
     value = float(value or 0)
     return str(int(value)) if value.is_integer() else f"{value:.2f}"
+
+
+def format_vehicle_text(value):
+    parts = [line.strip() for line in (value or "").replace("\r", "\n").split("\n") if line.strip()]
+    return ", ".join(parts) if parts else "neuvedeno"
+
+
+def sync_purchase_message(purchase_id):
+    purchase = get_db().execute("SELECT * FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
+    if purchase is None:
+        return None
+    discord_message = build_purchase_message(purchase, fetch_purchase_items(purchase_id))
+    get_db().execute("UPDATE purchases SET discord_message = ? WHERE id = ?", (discord_message, purchase_id))
+    return get_db().execute("SELECT * FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
+
+
+def sync_shift_record(shift_id):
+    shift = get_db().execute("SELECT * FROM shifts WHERE id = ?", (shift_id,)).fetchone()
+    if shift is None:
+        return None
+    started = parse_db_datetime(shift["started_at"])
+    shift_date = started.strftime("%Y-%m-%d") if started else shift["shift_date"]
+    is_finished = bool(shift["ended_at"])
+    duration_minutes = calculate_minutes(shift["started_at"], shift["ended_at"]) if is_finished else 0
+    status = "ukončeno" if is_finished else "probíhá"
+    get_db().execute(
+        "UPDATE shifts SET shift_date = ?, duration_minutes = ?, status = ? WHERE id = ?",
+        (shift_date, duration_minutes, status, shift_id),
+    )
+    shift = get_db().execute("SELECT * FROM shifts WHERE id = ?", (shift_id,)).fetchone()
+    discord_message = build_shift_message(shift) if is_finished else None
+    get_db().execute("UPDATE shifts SET discord_message = ? WHERE id = ?", (discord_message, shift_id))
+    return get_db().execute("SELECT * FROM shifts WHERE id = ?", (shift_id,)).fetchone()
 
 
 
@@ -339,8 +389,8 @@ def start_shift():
     callsign = request.form.get("callsign", "").strip()
     vehicle = request.form.get("vehicle", "").strip()
     note = request.form.get("note", "").strip()
-    if not all([name, callsign, vehicle]):
-        flash("Pro zahájení směny vyplňte jméno, volací znak a vozidlo.", "danger")
+    if not all([name, callsign]):
+        flash("Pro zahájení směny vyplňte jméno a volací znak.", "danger")
         return redirect(request.referrer or url_for("dashboard"))
     started = now_dt()
     db = get_db()
@@ -352,7 +402,7 @@ def start_shift():
         (name, callsign, vehicle, started.strftime("%Y-%m-%d"), db_timestamp(started), note, db_timestamp(started)),
     )
     db.commit()
-    flash("Směna byla zahájena.", "success")
+    flash("Směna byla zahájena. SPZ nebo použitá vozidla můžeš doplnit po směně.", "success")
     return redirect(request.referrer or url_for("dashboard"))
 
 
@@ -369,12 +419,54 @@ def end_shift():
         "UPDATE shifts SET ended_at = ?, duration_minutes = ?, status = 'ukončeno' WHERE id = ?",
         (ended_at, duration_minutes, active_shift["id"]),
     )
+    finished_shift = sync_shift_record(active_shift["id"])
     db.commit()
-    finished_shift = db.execute("SELECT * FROM shifts WHERE id = ?", (active_shift["id"],)).fetchone()
-    discord_message = build_shift_message(finished_shift)
-    db.execute("UPDATE shifts SET discord_message = ? WHERE id = ?", (discord_message, active_shift["id"]))
-    db.commit()
-    return jsonify({"ok": True, "message": discord_message, "redirect_url": url_for("shifts")})
+    return jsonify(
+        {
+            "ok": True,
+            "message": finished_shift["discord_message"],
+            "redirect_url": url_for("edit_shift", shift_id=active_shift["id"]),
+        }
+    )
+
+
+@app.route("/shifts/<int:shift_id>/edit", methods=["GET", "POST"])
+def edit_shift(shift_id):
+    shift = get_db().execute("SELECT * FROM shifts WHERE id = ?", (shift_id,)).fetchone()
+    if shift is None:
+        flash("Směna nebyla nalezena.", "danger")
+        return redirect(url_for("shifts"))
+    is_active_shift = shift["status"] == "probíhá"
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        callsign = request.form.get("callsign", "").strip()
+        vehicle = request.form.get("vehicle", "").strip()
+        note = request.form.get("note", "").strip()
+        started = parse_form_datetime(request.form.get("started_at"))
+        ended = parse_form_datetime(request.form.get("ended_at"))
+        if not all([name, callsign, started]):
+            flash("Vyplňte jméno, volací znak a platný začátek směny.", "danger")
+        elif not is_active_shift and ended is None:
+            flash("U ukončené směny vyplňte i platný konec směny.", "danger")
+        elif ended and ended <= started:
+            flash("Konec směny musí být později než začátek směny.", "danger")
+        else:
+            started_at = db_timestamp(started)
+            ended_at = None if is_active_shift else db_timestamp(ended)
+            db = get_db()
+            db.execute(
+                """
+                UPDATE shifts
+                SET name = ?, callsign = ?, vehicle = ?, note = ?, started_at = ?, ended_at = ?
+                WHERE id = ?
+                """,
+                (name, callsign, vehicle, note, started_at, ended_at, shift_id),
+            )
+            sync_shift_record(shift_id)
+            db.commit()
+            flash("Směna byla upravena. Délka i zápis směny byly přepočítány.", "success")
+            return redirect(url_for("shifts"))
+    return render_template("shift_form.html", shift=shift, is_active_shift=is_active_shift)
 
 
 @app.route("/shifts/<int:shift_id>/delete", methods=["POST"])
@@ -392,7 +484,7 @@ def export_shifts():
     rows = get_db().execute("SELECT * FROM shifts ORDER BY started_at DESC").fetchall()
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";")
-    writer.writerow(["ID", "Jméno", "Volací znak", "Vozidlo", "Datum", "Začátek", "Konec", "Minuty", "Stav", "Poznámka", "Discord zpráva", "Vytvořeno"])
+    writer.writerow(["ID", "Jméno", "Volací znak", "SPZ / vozidla", "Datum", "Začátek", "Konec", "Minuty", "Stav", "Poznámka", "Discord zpráva", "Vytvořeno"])
     for row in rows:
         writer.writerow([row["id"], row["name"], row["callsign"], row["vehicle"], row["shift_date"], row["started_at"], row["ended_at"] or "", row["duration_minutes"], row["status"], row["note"] or "", row["discord_message"] or "", row["created_at"]])
     return csv_response(output.getvalue(), "smeny.csv")
@@ -472,7 +564,8 @@ def handle_purchase_form(purchase=None, items=None):
     active_shift = get_active_shift()
     if request.method == "POST":
         allow_without_shift = request.form.get("allow_without_shift") == "1"
-        if active_shift is None and not allow_without_shift:
+        needs_shift_confirmation = purchase is None and active_shift is None and not allow_without_shift
+        if needs_shift_confirmation:
             flash("Není aktivní směna. Potvrďte uložení bez směny, nebo nejdříve zahajte směnu.", "danger")
             return render_template("purchase_form.html", purchase=purchase, items=items or [], catalog=get_catalog(), needs_shift_confirmation=True)
         default_name = active_shift["name"] if active_shift else ""
@@ -502,7 +595,7 @@ def handle_purchase_form(purchase=None, items=None):
                 flash("Nákup byl úspěšně přidán.", "success")
             else:
                 purchase_id = purchase["id"]
-                shift_id = purchase["shift_id"] if purchase["shift_id"] else shift_id
+                shift_id = purchase["shift_id"]
                 db.execute(
                     "UPDATE purchases SET shift_id = ?, name = ?, callsign = ?, reason = ?, note = ?, total_price = ? WHERE id = ?",
                     (shift_id, name, callsign, reason, note, total_price, purchase_id),
@@ -517,10 +610,9 @@ def handle_purchase_form(purchase=None, items=None):
                     """,
                     (purchase_id, item["item_name"], item["quantity"], item["unit_price"], item["total_price"], item["note"]),
                 )
-            db.commit()
-            saved_purchase = db.execute("SELECT * FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
-            discord_message = build_purchase_message(saved_purchase, fetch_purchase_items(purchase_id))
-            db.execute("UPDATE purchases SET discord_message = ? WHERE id = ?", (discord_message, purchase_id))
+            saved_purchase = sync_purchase_message(purchase_id)
+            if saved_purchase and saved_purchase["shift_id"]:
+                sync_shift_record(saved_purchase["shift_id"])
             db.commit()
             return redirect(url_for("purchases"))
     if items is None:
@@ -531,8 +623,14 @@ def handle_purchase_form(purchase=None, items=None):
 @app.route("/purchases/<int:purchase_id>/delete", methods=["POST"])
 def delete_purchase(purchase_id):
     db = get_db()
+    purchase = db.execute("SELECT * FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
+    if purchase is None:
+        flash("Nákup nebyl nalezen.", "danger")
+        return redirect(url_for("purchases"))
     db.execute("DELETE FROM purchase_items WHERE purchase_id = ?", (purchase_id,))
     db.execute("DELETE FROM purchases WHERE id = ?", (purchase_id,))
+    if purchase["shift_id"]:
+        sync_shift_record(purchase["shift_id"])
     db.commit()
     flash("Nákup byl smazán.", "success")
     return redirect(url_for("purchases"))
@@ -570,11 +668,13 @@ app.jinja_env.globals.update(
     format_quantity=format_quantity,
     format_duration=format_duration,
     format_time=format_time,
+    format_vehicle_text=format_vehicle_text,
     date_for_input=date_for_input,
+    datetime_for_input=datetime_for_input,
 )
 
 
 if __name__ == "__main__":
     with app.app_context():
         init_db()
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
