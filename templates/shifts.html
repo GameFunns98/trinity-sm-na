@@ -8,7 +8,7 @@
 
 <section class="panel mb-4">
     <form class="row g-3" method="get">
-        <div class="col-lg-6"><label class="form-label">Vyhledávání</label><input class="form-control" name="q" value="{{ query }}" placeholder="Jméno, volací znak nebo vozidlo"></div>
+        <div class="col-lg-6"><label class="form-label">Vyhledávání</label><input class="form-control" name="q" value="{{ query }}" placeholder="Jméno, volací znak nebo SPZ / vozidlo"></div>
         <div class="col-md-3"><label class="form-label">Datum od</label><input type="date" class="form-control" name="date_from" value="{{ date_from }}"></div>
         <div class="col-md-3"><label class="form-label">Datum do</label><input type="date" class="form-control" name="date_to" value="{{ date_to }}"></div>
         <div class="col-12"><button class="btn btn-info">Filtrovat</button><a href="{{ url_for('shifts') }}" class="btn btn-outline-light">Vyčistit</a></div>
@@ -18,13 +18,13 @@
 <section class="panel">
     <div class="table-responsive">
         <table class="table table-dark table-hover align-middle">
-            <thead><tr><th>Jméno</th><th>Volací znak</th><th>Vozidlo</th><th>Datum</th><th>Začátek</th><th>Konec</th><th>Délka</th><th>Stav</th><th>Discord</th><th>Akce</th></tr></thead>
+            <thead><tr><th>Jméno</th><th>Volací znak</th><th>SPZ / vozidla</th><th>Datum</th><th>Začátek</th><th>Konec</th><th>Délka</th><th>Stav</th><th>Discord</th><th>Akce</th></tr></thead>
             <tbody>
             {% for shift in shifts %}
                 <tr>
-                    <td>{{ shift.name }}</td><td>{{ shift.callsign }}</td><td>{{ shift.vehicle }}</td><td>{{ shift.shift_date }}</td><td>{{ shift.started_at }}</td><td>{{ shift.ended_at or '-' }}</td><td>{{ format_duration(shift.duration_minutes) }}</td><td><span class="badge {{ 'text-bg-success' if shift.status == 'probíhá' else 'text-bg-secondary' }}">{{ shift.status }}</span></td>
+                    <td>{{ shift.name }}</td><td>{{ shift.callsign }}</td><td>{{ format_vehicle_text(shift.vehicle) }}</td><td>{{ shift.shift_date }}</td><td>{{ shift.started_at }}</td><td>{{ shift.ended_at or '-' }}</td><td>{{ format_duration(shift.duration_minutes) }}</td><td><span class="badge {{ 'text-bg-success' if shift.status == 'probíhá' else 'text-bg-secondary' }}">{{ shift.status }}</span></td>
                     <td>{% if shift.discord_message %}<button class="btn btn-sm btn-outline-info show-discord" data-message="{{ shift.discord_message|e }}">Zobrazit</button>{% else %}-{% endif %}</td>
-                    <td class="table-actions"><form method="post" action="{{ url_for('delete_shift', shift_id=shift.id) }}" class="d-inline delete-form"><button class="btn btn-sm btn-outline-danger">Smazat</button></form></td>
+                    <td class="table-actions"><a href="{{ url_for('edit_shift', shift_id=shift.id) }}" class="btn btn-sm btn-outline-warning">Upravit</a><form method="post" action="{{ url_for('delete_shift', shift_id=shift.id) }}" class="d-inline delete-form"><button class="btn btn-sm btn-outline-danger">Smazat</button></form></td>
                 </tr>
             {% else %}
                 <tr><td colspan="10" class="text-center text-secondary">Žádné směny neodpovídají filtru.</td></tr>

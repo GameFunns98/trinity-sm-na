@@ -9,12 +9,11 @@
     <div class="row g-3">
         <div class="col-md-3"><span class="muted-label">Jméno</span><strong>{{ active_shift.name }}</strong></div>
         <div class="col-md-3"><span class="muted-label">Volací znak</span><strong>{{ active_shift.callsign }}</strong></div>
-        <div class="col-md-3"><span class="muted-label">Vozidlo</span><strong>{{ active_shift.vehicle }}</strong></div>
+        <div class="col-md-3"><span class="muted-label">SPZ / vozidla</span><strong>{{ format_vehicle_text(active_shift.vehicle) if active_shift.vehicle else 'doplníš po směně' }}</strong></div>
         <div class="col-md-3"><span class="muted-label">Začátek</span><strong>{{ active_shift.started_at }}</strong></div>
         <div class="col-md-3"><span class="muted-label">Živý čas</span><strong class="live-duration">00:00</strong></div>
         <div class="col-md-3"><span class="muted-label">Nákupy ve směně</span><strong>{{ active_stats.count }}</strong></div>
         <div class="col-md-3"><span class="muted-label">Cena nákupů</span><strong>${{ format_money(active_stats.total_price) }}</strong></div>
-        <div class="col-md-3"><span class="muted-label">Váha nákupů</span><strong>{{ format_weight(active_stats.total_weight) }}g</strong></div>
     </div>
 </section>
 {% else %}
@@ -34,7 +33,7 @@
             <thead><tr><th>Jméno</th><th>Volací znak</th><th>Důvod</th><th>Cena</th><th>Váha</th><th>Datum</th></tr></thead>
             <tbody>
             {% for purchase in latest_purchases %}
-                <tr><td>{{ purchase.name }}</td><td>{{ purchase.callsign }}</td><td>{{ purchase.reason }}</td><td>${{ format_money(purchase.total_price) }}</td><td>{{ format_weight(purchase.total_weight) }}g</td><td>{{ purchase.created_at[:10] }}</td></tr>
+                <tr><td>{{ purchase.name }}</td><td>{{ purchase.callsign }}</td><td>{{ purchase.reason }}</td><td>${{ format_money(purchase.total_price) }}</td><td>{{ purchase.created_at[:10] }}</td></tr>
             {% else %}
                 <tr><td colspan="6" class="text-center text-secondary">Zatím žádné nákupy.</td></tr>
             {% endfor %}
