@@ -10,7 +10,7 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b 1
 )
 
-set "TRINITY_HOST=127.0.0.1"
+set "TRINITY_HOST=0.0.0.0"
 set "TRINITY_PORT=5000"
 set "TRINITY_THREADS=4"
 
