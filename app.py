@@ -22,7 +22,7 @@ CATALOG_ITEMS = [
 ]
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "zmente-tento-lokalni-klic"
+app.config["SECRET_KEY"] = os.getenv("TRINITY_SECRET_KEY", "zmente-tento-lokalni-klic")
 
 
 def get_db():
@@ -677,4 +677,7 @@ app.jinja_env.globals.update(
 if __name__ == "__main__":
     with app.app_context():
         init_db()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    host = os.getenv("TRINITY_HOST", "127.0.0.1")
+    port = int(os.getenv("TRINITY_PORT", "5000"))
+    debug = os.getenv("TRINITY_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
+    app.run(host=host, port=port, debug=debug)

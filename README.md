@@ -61,6 +61,12 @@ pip install -r requirements.txt
 python app.py
 ```
 
+Tohle je vhodné pro vývoj. Pro běžné lokální používání bez Flask development serveru použijte:
+
+```powershell
+.venv\Scripts\python.exe serve.py
+```
+
 Poté otevřete prohlížeč na adrese:
 
 ```text
@@ -68,6 +74,51 @@ http://127.0.0.1:5000
 ```
 
 Databáze SQLite se vytvoří automaticky v souboru `instance/database.db`.
+
+## Automatické spuštění na pozadí ve Windows
+
+Projekt obsahuje připravené soubory:
+
+- `start_trinity_server.bat` - ruční spuštění serveru přes produkční runner.
+- `start_trinity_server_hidden.vbs` - skryté spuštění bez viditelné konzole.
+- `install_startup.ps1` - vytvoří zástupce do složky `Po spuštění`.
+
+Doporučený postup:
+
+1. Připravte prostředí a závislosti:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+2. Otestujte produkční spuštění:
+
+```powershell
+.venv\Scripts\python.exe serve.py
+```
+
+3. Pokud vše funguje, nainstalujte autostart:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install_startup.ps1
+```
+
+4. Odhlaste se nebo restartujte počítač. Po přihlášení se server spustí na pozadí automaticky.
+
+Pokud nechcete použít instalační skript, můžete ručně otevřít `shell:startup` a vložit tam zástupce na `start_trinity_server_hidden.vbs`.
+
+Log startu a případných chyb najdete v `instance/server.log`.
+
+## Finální nasazení bez development serveru
+
+- `python app.py` ponechte jen pro vývoj.
+- Pro finální lokální provoz používejte `serve.py`, který spouští aplikaci přes `waitress`.
+- Volitelně si nastavte vlastní klíč:
+
+```powershell
+setx TRINITY_SECRET_KEY "sem-vloz-vlastni-dlouhy-klic"
+```
 
 ## Výchozí katalog položek
 
